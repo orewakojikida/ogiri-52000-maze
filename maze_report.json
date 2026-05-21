@@ -1,7 +1,0 @@
-{
-  "version": "v5_true_maze",
-  "design": "42x42 branching maze, all floor cells and wall sides assigned answer panels; visible panels are virtualized near player.",
-  "input_total_answers": 51996,
-  "input_topic_count": 52,
-  "note": "All surfaces receive panelIndex = surfaceIndex % answerPanelCount in the browser."
-}
