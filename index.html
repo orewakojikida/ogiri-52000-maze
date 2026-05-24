@@ -1,0 +1,520 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>52,000答の迷路 v5 true maze</title>
+  <style>
+    html, body { margin:0; width:100%; height:100%; overflow:hidden; background:#050505; color:#eee; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif; }
+    #app { position:fixed; inset:0; }
+    #hud { position:fixed; left:12px; top:12px; z-index:10; max-width:min(560px, calc(100vw - 24px)); background:rgba(0,0,0,.62); border:1px solid rgba(255,255,255,.18); border-radius:14px; padding:10px 12px; backdrop-filter: blur(8px); line-height:1.45; font-size:13px; }
+    #hud b { font-size:14px; }
+    #hud .tiny { opacity:.72; font-size:12px; }
+    #hud button { margin-top:6px; margin-right:6px; background:#111; color:#eee; border:1px solid #666; border-radius:999px; padding:6px 10px; cursor:pointer; }
+    #center { position:fixed; left:50%; top:50%; width:10px; height:10px; margin-left:-5px; margin-top:-5px; border:1px solid rgba(255,255,255,.8); border-radius:50%; z-index:4; pointer-events:none; box-shadow:0 0 18px rgba(255,255,255,.55); }
+    #reader { position:fixed; left:50%; bottom:22px; transform:translateX(-50%); width:min(780px, calc(100vw - 28px)); max-height:45vh; overflow:auto; z-index:20; display:none; background:rgba(3,3,3,.92); border:1px solid rgba(255,255,255,.25); border-radius:16px; padding:14px 16px; box-shadow:0 8px 60px rgba(0,0,0,.55); white-space:pre-wrap; line-height:1.52; }
+    #reader .title { font-weight:700; margin-bottom:8px; color:#fff; }
+    #reader .close { float:right; background:#222; border:1px solid #777; color:#fff; border-radius:999px; padding:4px 8px; cursor:pointer; }
+    #mobileControls { display:none; position:fixed; inset:0; z-index:8; pointer-events:none; }
+    #stickBase { position:absolute; left:22px; bottom:26px; width:120px; height:120px; border-radius:50%; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.2); pointer-events:auto; touch-action:none; }
+    #stick { position:absolute; left:38px; top:38px; width:44px; height:44px; border-radius:50%; background:rgba(255,255,255,.32); box-shadow:0 0 14px rgba(255,255,255,.18); }
+    #touchLook { position:absolute; right:0; top:0; width:58%; height:100%; pointer-events:auto; touch-action:none; }
+    #mobileBtns { position:absolute; right:14px; bottom:22px; display:flex; flex-direction:column; gap:8px; pointer-events:auto; }
+    #mobileBtns button { background:rgba(0,0,0,.66); color:#fff; border:1px solid rgba(255,255,255,.35); border-radius:999px; padding:10px 13px; font-size:14px; }
+    #warpConfirm { position:fixed; inset:0; z-index:30; display:none; place-items:center; background:rgba(0,0,0,.68); backdrop-filter: blur(5px); }
+    #warpConfirm.show { display:grid; }
+    #warpConfirm .dialog { width:min(360px, calc(100vw - 34px)); background:rgba(10,10,10,.94); border:1px solid rgba(255,255,255,.28); border-radius:16px; padding:18px; box-shadow:0 16px 70px rgba(0,0,0,.7); }
+    #warpConfirm .title { font-weight:700; font-size:16px; margin-bottom:8px; }
+    #warpConfirm .body { color:rgba(255,255,255,.74); font-size:13px; line-height:1.55; margin-bottom:14px; }
+    #warpConfirm .actions { display:flex; gap:10px; justify-content:flex-end; }
+    #warpConfirm button { background:#111; color:#eee; border:1px solid #666; border-radius:999px; padding:8px 12px; cursor:pointer; }
+    #warpConfirm #confirmWarpBtn { background:#eee; color:#080808; border-color:#fff; }
+    @media (pointer:coarse), (max-width: 800px) {
+      #mobileControls { display:block; }
+      #hud { font-size:12px; max-width:calc(100vw - 24px); }
+      #center { display:none; }
+    }
+  </style>
+</head>
+<body>
+<div id="app"></div>
+<div id="center"></div>
+<div id="hud">
+  <b>52,000答の迷路 v5</b><br>
+  一本道ではなく、42×42セルの分岐迷路です。壁面と床面の両方に回答パネルが出ます。<br>
+  <span class="tiny">WASD移動 / マウス視点 / Shift速歩 / Fランダム確認 / Eまたはクリックで読む / START→GOAL</span><br>
+  <button id="lockBtn">クリックして開始</button><button id="warpBtn">ランダム移動</button>
+</div>
+<div id="reader"><button class="close" id="closeReader">閉じる</button><div class="title"></div><div class="body"></div></div>
+<div id="warpConfirm" role="dialog" aria-modal="true" aria-labelledby="warpConfirmTitle">
+  <div class="dialog">
+    <div class="title" id="warpConfirmTitle">ランダム移動しますか？</div>
+    <div class="body">移動先の近くの回答パネルを読み込み直します。連続で押すと重くなりやすいので、確認してから移動します。</div>
+    <div class="actions">
+      <button id="cancelWarpBtn" type="button">キャンセル</button>
+      <button id="confirmWarpBtn" type="button">移動する</button>
+    </div>
+  </div>
+</div>
+<div id="mobileControls">
+  <div id="stickBase"><div id="stick"></div></div>
+  <div id="touchLook"></div>
+  <div id="mobileBtns"><button id="readBtn">読む</button><button id="mobileWarpBtn">ランダム</button></div>
+</div>
+<script type="importmap">
+{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js"}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+
+const COLS = 42, ROWS = 42;
+const CELL = 4.0;
+const WALL_H = 3.2;
+const WALL_T = 0.20;
+const PLAYER_R = 0.38;
+const VIEW_RADIUS = 24;
+const MAX_VISIBLE_PANELS = 1600;
+const PANEL_EPS = 0.024;
+
+let scene, camera, renderer, clock;
+let maze, wallRects = [], surfaces = [], panels = [];
+let startCell = {c:0,r:0}, goalCell = {c:COLS-1,r:ROWS-1};
+let panelPool = [], activeSurfaceKeys = new Map(), textureCache = new Map();
+let player = { x:0, y:1.35, z:0, yaw:0, pitch:0 };
+let keys = {};
+let mobileMove = {x:0, y:0};
+let flashlight, ambient;
+
+const app = document.getElementById('app');
+const reader = document.getElementById('reader');
+const readerTitle = reader.querySelector('.title');
+const readerBody = reader.querySelector('.body');
+const warpConfirm = document.getElementById('warpConfirm');
+
+document.getElementById('closeReader').onclick = () => reader.style.display = 'none';
+document.getElementById('lockBtn').onclick = () => app.requestPointerLock?.();
+document.getElementById('warpBtn').onclick = requestRandomWarp;
+document.getElementById('mobileWarpBtn').onclick = requestRandomWarp;
+document.getElementById('readBtn').onclick = readCenter;
+document.getElementById('cancelWarpBtn').onclick = closeWarpConfirm;
+document.getElementById('confirmWarpBtn').onclick = () => { closeWarpConfirm(); randomWarp(); };
+warpConfirm.addEventListener('click', (e)=>{ if(e.target===warpConfirm) closeWarpConfirm(); });
+
+window.addEventListener('keydown', (e)=>{
+  keys[e.code]=true;
+  if(e.code==='KeyF'){ e.preventDefault(); requestRandomWarp(); }
+  if(e.code==='Escape') closeWarpConfirm();
+  if(e.code==='KeyE') readCenter();
+});
+window.addEventListener('keyup', (e)=>{ keys[e.code]=false; });
+window.addEventListener('click', ()=>{ if(document.pointerLockElement===app) readCenter(); });
+document.addEventListener('mousemove', (e)=>{
+  if(document.pointerLockElement!==app) return;
+  player.yaw -= e.movementX * 0.0023;
+  player.pitch -= e.movementY * 0.0020;
+  player.pitch = clamp(player.pitch, -1.35, 1.15);
+});
+
+setupMobileControls();
+init();
+
+async function init(){
+  const data = await fetch('ogiri_all.json').then(r=>r.json());
+  panels = buildAnswerPanels(data);
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x040404);
+  scene.fog = new THREE.FogExp2(0x030303, 0.035);
+  camera = new THREE.PerspectiveCamera(68, window.innerWidth/window.innerHeight, 0.05, 220);
+  renderer = new THREE.WebGLRenderer({ antialias:true, powerPreference:'high-performance' });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 1.7));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  app.appendChild(renderer.domElement);
+  clock = new THREE.Clock();
+
+  ambient = new THREE.AmbientLight(0xffffff, 0.006);
+  scene.add(ambient);
+  flashlight = new THREE.SpotLight(0xffffff, 86, 22, Math.PI/7.1, 0.64, 1.15);
+  flashlight.position.set(0, player.y, 0);
+  flashlight.target.position.set(0, player.y, -1);
+  flashlight.castShadow = true;
+  flashlight.shadow.mapSize.set(1024, 1024);
+  flashlight.shadow.camera.near = 0.1;
+  flashlight.shadow.camera.far = 24;
+  scene.add(flashlight, flashlight.target);
+
+  maze = generateMaze(COLS, ROWS, 52000);
+  goalCell = findFarthestCell(maze, startCell.c, startCell.r);
+  buildWorld();
+  createPanelPool(MAX_VISIBLE_PANELS);
+  randomWarp(startCell.c, startCell.r);
+  window.addEventListener('resize', onResize);
+  renderer.setAnimationLoop(loop);
+}
+
+function buildAnswerPanels(data){
+  const result = [];
+  for(const topic of data.topics){
+    const answers = topic.answers || [];
+    for(let i=0; i<answers.length; i+=10){
+      const chunk = answers.slice(i, i+10);
+      result.push({
+        topicId: topic.topicId,
+        topic: topic.topic,
+        file: topic.file,
+        startId: chunk[0]?.id,
+        endId: chunk[chunk.length-1]?.id,
+        lines: chunk.map(a => ({id:a.id, text:a.text}))
+      });
+    }
+  }
+  return result;
+}
+
+function generateMaze(cols, rows, seed){
+  const rand = mulberry32(seed);
+  const cells = Array.from({length:rows}, (_,r)=>Array.from({length:cols},(_,c)=>({r,c,visited:false,w:{N:true,E:true,S:true,W:true}})));
+  const dirs = [ ['N',0,-1,'S'], ['E',1,0,'W'], ['S',0,1,'N'], ['W',-1,0,'E'] ];
+  const stack = [cells[startCell.r][startCell.c]];
+  cells[startCell.r][startCell.c].visited = true;
+  while(stack.length){
+    const cur = stack[stack.length-1];
+    const shuffled = dirs.slice().sort(()=>rand()-0.5);
+    let carved = false;
+    for(const [d,dx,dy,opp] of shuffled){
+      const nr=cur.r+dy, nc=cur.c+dx;
+      if(nr>=0 && nr<rows && nc>=0 && nc<cols && !cells[nr][nc].visited){
+        cur.w[d] = false;
+        cells[nr][nc].w[opp] = false;
+        cells[nr][nc].visited = true;
+        stack.push(cells[nr][nc]);
+        carved = true;
+        break;
+      }
+    }
+    if(!carved) stack.pop();
+  }
+  // 入口と出口をはっきりさせるため、外周に1箇所ずつ口を開ける
+  cells[startCell.r][startCell.c].w.W = false;
+  return cells;
+}
+
+function findFarthestCell(cells, startC, startR){
+  const q=[[startC,startR,0]];
+  const seen = new Set([`${startR},${startC}`]);
+  let best = {c:startC, r:startR, d:0};
+  while(q.length){
+    const [c,r,d] = q.shift();
+    if(d > best.d) best = {c,r,d};
+    const cell = cells[r][c];
+    if(!cell.w.N && r>0 && !seen.has(`${r-1},${c}`)){ seen.add(`${r-1},${c}`); q.push([c,r-1,d+1]); }
+    if(!cell.w.E && c<cells[0].length-1 && !seen.has(`${r},${c+1}`)){ seen.add(`${r},${c+1}`); q.push([c+1,r,d+1]); }
+    if(!cell.w.S && r<cells.length-1 && !seen.has(`${r+1},${c}`)){ seen.add(`${r+1},${c}`); q.push([c,r+1,d+1]); }
+    if(!cell.w.W && c>0 && !seen.has(`${r},${c-1}`)){ seen.add(`${r},${c-1}`); q.push([c-1,r,d+1]); }
+  }
+  // 出口を外周に作りやすいよう、最遠の外周セルを優先
+  let outer = best;
+  for(const key of seen){
+    const [r,c] = key.split(',').map(Number);
+    const d = Math.abs(c-startC)+Math.abs(r-startR);
+    if((r===0||c===0||r===cells.length-1||c===cells[0].length-1) && d >= outer.d){ outer = {c,r,d}; }
+  }
+  const g = outer;
+  if(g.r===0) cells[g.r][g.c].w.N = false;
+  else if(g.c===cells[0].length-1) cells[g.r][g.c].w.E = false;
+  else if(g.r===cells.length-1) cells[g.r][g.c].w.S = false;
+  else if(g.c===0) cells[g.r][g.c].w.W = false;
+  return {c:g.c, r:g.r};
+}
+
+function buildWorld(){
+  const wallSetH = new Set();
+  const wallSetV = new Set();
+  for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
+    const cell = maze[r][c];
+    if(cell.w.N) wallSetH.add(`${r},${c}`);
+    if(cell.w.S) wallSetH.add(`${r+1},${c}`);
+    if(cell.w.W) wallSetV.add(`${r},${c}`);
+    if(cell.w.E) wallSetV.add(`${r},${c+1}`);
+  }
+
+  const floorGeo = new THREE.PlaneGeometry(CELL*0.985, CELL*0.985);
+  const floorBaseMat = new THREE.MeshStandardMaterial({ color:0x0b0b0b, roughness:0.96, metalness:0.0 });
+  const floorInst = new THREE.InstancedMesh(floorGeo, floorBaseMat, ROWS*COLS);
+  floorInst.receiveShadow = true;
+  floorInst.rotation.x = -Math.PI/2;
+  let idx=0;
+  const dummy = new THREE.Object3D();
+  for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
+    const {x,z}=cellCenter(c,r);
+    dummy.position.set(x, 0, z); dummy.updateMatrix(); floorInst.setMatrixAt(idx++, dummy.matrix);
+    surfaces.push({kind:'floor', x, y:0.022, z, rotX:-Math.PI/2, rotY:0, w:CELL*0.94, h:CELL*0.94});
+  }
+  scene.add(floorInst);
+
+  const wallMat = new THREE.MeshStandardMaterial({ color:0x070707, roughness:0.98 });
+  const wallBoxes=[];
+  for(const key of wallSetH){
+    const [g,c]=key.split(',').map(Number);
+    const x = c*CELL, z = (g-0.5)*CELL;
+    wallBoxes.push({ori:'H', x,z, sx:CELL+WALL_T, sz:WALL_T, g,c});
+    wallRects.push({x1:x-(CELL+WALL_T)/2, x2:x+(CELL+WALL_T)/2, z1:z-WALL_T/2, z2:z+WALL_T/2});
+    if(g>0) surfaces.push({kind:'wall', x, y:WALL_H/2, z:z-(WALL_T/2 + PANEL_EPS), rotX:0, rotY:0, w:CELL*0.98, h:WALL_H*0.96});
+    if(g<ROWS) surfaces.push({kind:'wall', x, y:WALL_H/2, z:z+(WALL_T/2 + PANEL_EPS), rotX:0, rotY:Math.PI, w:CELL*0.98, h:WALL_H*0.96});
+  }
+  for(const key of wallSetV){
+    const [r,g]=key.split(',').map(Number);
+    const x = (g-0.5)*CELL, z = r*CELL;
+    wallBoxes.push({ori:'V', x,z, sx:WALL_T, sz:CELL+WALL_T, r,g});
+    wallRects.push({x1:x-WALL_T/2, x2:x+WALL_T/2, z1:z-(CELL+WALL_T)/2, z2:z+(CELL+WALL_T)/2});
+    if(g>0) surfaces.push({kind:'wall', x:x-(WALL_T/2 + PANEL_EPS), y:WALL_H/2, z, rotX:0, rotY:Math.PI/2, w:CELL*0.98, h:WALL_H*0.96});
+    if(g<COLS) surfaces.push({kind:'wall', x:x+(WALL_T/2 + PANEL_EPS), y:WALL_H/2, z, rotX:0, rotY:-Math.PI/2, w:CELL*0.98, h:WALL_H*0.96});
+  }
+  const boxGeo = new THREE.BoxGeometry(1,1,1);
+  const wallInst = new THREE.InstancedMesh(boxGeo, wallMat, wallBoxes.length);
+  wallInst.castShadow = true;
+  wallInst.receiveShadow = true;
+  wallBoxes.forEach((b,i)=>{
+    dummy.position.set(b.x, WALL_H/2, b.z);
+    dummy.scale.set(b.sx, WALL_H, b.sz);
+    dummy.rotation.set(0,0,0);
+    dummy.updateMatrix(); wallInst.setMatrixAt(i, dummy.matrix);
+  });
+  scene.add(wallInst);
+
+  // すべての表面に回答パネル番号を割り当てる。5200枚弱を全表面にほぼ1周で使い切る。
+  for(let i=0;i<surfaces.length;i++) surfaces[i].panelIndex = i % panels.length;
+
+  // 迷路の外に薄い天井霧と境界感
+  const roofGeo = new THREE.PlaneGeometry(COLS*CELL, ROWS*CELL);
+  const roofMat = new THREE.MeshBasicMaterial({color:0x000000, transparent:true, opacity:0.18, side:THREE.DoubleSide});
+  const roof = new THREE.Mesh(roofGeo, roofMat);
+  roof.rotation.x = Math.PI/2;
+  roof.position.set((COLS-1)*CELL/2, WALL_H+0.05, (ROWS-1)*CELL/2);
+  scene.add(roof);
+
+  // START / GOAL マーカー
+  const markerGeo = new THREE.PlaneGeometry(CELL*0.78, CELL*0.78);
+  const mkStart = makeWordPanel('START', '#183d1f', '#d7ffd6');
+  const mkGoal  = makeWordPanel('GOAL',  '#40220f', '#ffe6b7');
+  const startMesh = new THREE.Mesh(markerGeo, new THREE.MeshStandardMaterial({map:mkStart, transparent:true, opacity:0.92, side:THREE.DoubleSide, roughness:0.9}));
+  startMesh.rotation.x = -Math.PI/2;
+  startMesh.receiveShadow = true;
+  const sp = cellCenter(startCell.c, startCell.r); startMesh.position.set(sp.x, 0.03, sp.z); scene.add(startMesh);
+  const goalMesh = new THREE.Mesh(markerGeo, new THREE.MeshStandardMaterial({map:mkGoal, transparent:true, opacity:0.96, side:THREE.DoubleSide, roughness:0.9}));
+  goalMesh.rotation.x = -Math.PI/2;
+  goalMesh.receiveShadow = true;
+  const gp = cellCenter(goalCell.c, goalCell.r); goalMesh.position.set(gp.x, 0.031, gp.z); scene.add(goalMesh);
+
+  window.__mazeStats = { cells: ROWS*COLS, surfaces: surfaces.length, answerPanels: panels.length, wallSegments: wallBoxes.length, start:startCell, goal:goalCell };
+}
+
+function createPanelPool(n){
+  const geo = new THREE.PlaneGeometry(1,1);
+  for(let i=0;i<n;i++){
+    const mat = new THREE.MeshStandardMaterial({ color:0xffffff, side:THREE.DoubleSide, transparent:true, opacity:0.96, roughness:0.88, metalness:0.0 });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.visible = false;
+    mesh.receiveShadow = true;
+    mesh.userData = { surfaceIndex:-1, panelIndex:-1 };
+    scene.add(mesh);
+    panelPool.push(mesh);
+  }
+}
+
+function makeTexture(panel, isFloor){
+  const key = `${panel.topicId}-${panel.startId}-${isFloor?'F':'W'}`;
+  if(textureCache.has(key)) return textureCache.get(key);
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024; canvas.height = 768;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = isFloor ? '#080808' : '#0a0a0a';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.strokeStyle = isFloor ? 'rgba(255,255,255,.35)' : 'rgba(255,255,255,.50)';
+  ctx.lineWidth = 8; ctx.strokeRect(10,10,canvas.width-20,canvas.height-20);
+  ctx.fillStyle = isFloor ? 'rgba(255,255,255,.72)' : 'rgba(255,255,255,.88)';
+  ctx.font = 'bold 30px system-ui, "Hiragino Sans", "Yu Gothic", sans-serif';
+  const title = `第${String(panel.topicId).padStart(2,'0')}題　${panel.topic}`;
+  drawWrapped(ctx, title, 34, 54, canvas.width-68, 36, 2);
+  ctx.fillStyle = isFloor ? 'rgba(255,255,255,.64)' : 'rgba(255,255,255,.82)';
+  ctx.font = isFloor ? '24px system-ui, "Hiragino Sans", "Yu Gothic", sans-serif' : '25px system-ui, "Hiragino Sans", "Yu Gothic", sans-serif';
+  let y = 134;
+  for(const a of panel.lines){
+    const before = y;
+    y = drawWrapped(ctx, `${a.id}. ${a.text}`, 42, y, canvas.width-84, isFloor?31:32, 2);
+    if(y===before) y += 32;
+    y += 5;
+    if(y>canvas.height-28) break;
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = renderer?.capabilities?.getMaxAnisotropy?.() || 1;
+  textureCache.set(key, tex);
+  if(textureCache.size > 2200){
+    // 古いキャッシュを一部捨てる。全部をテクスチャ化しないことでスマホでも落ちにくくする。
+    const first = textureCache.keys().next().value;
+    const old = textureCache.get(first); old.dispose?.(); textureCache.delete(first);
+  }
+  return tex;
+}
+
+function drawWrapped(ctx, text, x, y, maxW, lineH, maxLines=99){
+  let line='', lines=0;
+  for(const ch of text){
+    const test = line + ch;
+    if(ctx.measureText(test).width > maxW && line){
+      ctx.fillText(line, x, y); y += lineH; lines++; line = ch;
+      if(lines >= maxLines){ ctx.fillText('…', x, y-lineH); return y; }
+    } else line = test;
+  }
+  if(line && lines < maxLines){ ctx.fillText(line, x, y); y += lineH; }
+  return y;
+}
+
+
+function makeWordPanel(word, bg, fg){
+  const canvas = document.createElement('canvas');
+  canvas.width = 512; canvas.height = 512;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = bg; ctx.fillRect(0,0,512,512);
+  ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 12; ctx.strokeRect(16,16,480,480);
+  ctx.fillStyle = fg; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.font = 'bold 92px system-ui, sans-serif';
+  ctx.fillText(word, 256, 256);
+  const tex = new THREE.CanvasTexture(canvas); tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+function loop(){
+  const dt = Math.min(clock.getDelta(), 0.045);
+  updateMovement(dt);
+  updateCamera();
+  updateVisiblePanels();
+  renderer.render(scene, camera);
+}
+
+function updateMovement(dt){
+  const speed = (keys.ShiftLeft || keys.ShiftRight) ? 4.8 : 2.9;
+  let fwd = 0, side = 0;
+  if(keys.KeyW || keys.ArrowUp) fwd += 1;
+  if(keys.KeyS || keys.ArrowDown) fwd -= 1;
+  if(keys.KeyA || keys.ArrowLeft) side -= 1;
+  if(keys.KeyD || keys.ArrowRight) side += 1;
+  fwd += -mobileMove.y;
+  side += mobileMove.x;
+  const len = Math.hypot(fwd, side) || 1;
+  fwd /= len; side /= len;
+  const sin = Math.sin(player.yaw), cos = Math.cos(player.yaw);
+  const dx = (side*cos - fwd*sin) * speed * dt;
+  const dz = (side*sin + fwd*cos) * speed * dt;
+  tryMove(dx, 0); tryMove(0, dz);
+}
+function tryMove(dx,dz){
+  const nx = player.x + dx, nz = player.z + dz;
+  if(!collides(nx,nz)){ player.x=nx; player.z=nz; }
+}
+function collides(x,z){
+  if(x < -CELL/2+PLAYER_R || z < -CELL/2+PLAYER_R || x > (COLS-.5)*CELL-PLAYER_R || z > (ROWS-.5)*CELL-PLAYER_R) return true;
+  for(const w of wallRects){
+    if(x+PLAYER_R>w.x1 && x-PLAYER_R<w.x2 && z+PLAYER_R>w.z1 && z-PLAYER_R<w.z2) return true;
+  }
+  return false;
+}
+function updateCamera(){
+  camera.position.set(player.x, player.y, player.z);
+  camera.rotation.order='YXZ';
+  camera.rotation.y = player.yaw;
+  camera.rotation.x = player.pitch;
+  const dir = new THREE.Vector3(0,0,-1).applyEuler(camera.rotation);
+  flashlight.position.set(player.x, player.y-0.08, player.z);
+  flashlight.target.position.set(player.x + dir.x*8, player.y + dir.y*8, player.z + dir.z*8);
+  flashlight.target.updateMatrixWorld();
+}
+function updateVisiblePanels(){
+  const wallCandidates=[];
+  const floorCandidates=[];
+  const r2 = VIEW_RADIUS*VIEW_RADIUS;
+  for(let i=0;i<surfaces.length;i++){
+    const s=surfaces[i];
+    const dx=s.x-player.x, dz=s.z-player.z;
+    const d2=dx*dx+dz*dz;
+    if(d2>=r2) continue;
+    if(s.kind==='wall') wallCandidates.push([d2,i]);
+    else floorCandidates.push([d2,i]);
+  }
+  wallCandidates.sort((a,b)=>a[0]-b[0]);
+  floorCandidates.sort((a,b)=>a[0]-b[0]);
+  const ordered = wallCandidates.concat(floorCandidates);
+  const count=Math.min(ordered.length, panelPool.length);
+  for(let pi=0;pi<count;pi++){
+    const sIdx = ordered[pi][1];
+    const s=surfaces[sIdx];
+    const mesh=panelPool[pi];
+    const panel=panels[s.panelIndex];
+    const isFloor=s.kind==='floor';
+    const tex=makeTexture(panel, isFloor);
+    if(mesh.material.map !== tex){ mesh.material.map = tex; mesh.material.needsUpdate = true; }
+    mesh.position.set(s.x,s.y,s.z);
+    mesh.rotation.set(s.rotX, s.rotY, 0);
+    // 壁だけXスケールを反転して、内側に表示したまま文字の左右反転を補正する。
+    if(s.kind==='wall') mesh.scale.set(-s.w, s.h, 1);
+    else mesh.scale.set(s.w, s.h, 1);
+    mesh.visible = true;
+    mesh.userData.surfaceIndex=sIdx;
+    mesh.userData.panelIndex=s.panelIndex;
+  }
+  for(let pi=count; pi<panelPool.length; pi++) panelPool[pi].visible=false;
+}
+
+function readCenter(){
+  const ray = new THREE.Raycaster();
+  ray.setFromCamera(new THREE.Vector2(0,0), camera);
+  const hits = ray.intersectObjects(panelPool.filter(m=>m.visible), false);
+  if(!hits.length) return;
+  const mesh = hits[0].object;
+  const panel = panels[mesh.userData.panelIndex];
+  openPanel(panel);
+}
+function openPanel(panel){
+  readerTitle.textContent = `第${panel.topicId}題　${panel.topic}　${panel.startId}〜${panel.endId}`;
+  readerBody.textContent = panel.lines.map(a=>`${a.id}. ${a.text}`).join('\n');
+  reader.style.display = 'block';
+}
+function requestRandomWarp(){
+  if(warpConfirm.classList.contains('show')) return;
+  document.exitPointerLock?.();
+  warpConfirm.classList.add('show');
+}
+function closeWarpConfirm(){
+  warpConfirm.classList.remove('show');
+}
+function randomWarp(c=null,r=null){
+  if(c===null) c = Math.floor(Math.random()*COLS);
+  if(r===null) r = Math.floor(Math.random()*ROWS);
+  const p=cellCenter(c,r); player.x=p.x; player.z=p.z; reader.style.display='none';
+}
+function lookDown(){ player.pitch = 1.05; }
+function cellCenter(c,r){ return {x:c*CELL, z:r*CELL}; }
+function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+function mulberry32(a){ return function(){ let t=a+=0x6D2B79F5; t=Math.imul(t^t>>>15,t|1); t^=t+Math.imul(t^t>>>7,t|61); return ((t^t>>>14)>>>0)/4294967296; }; }
+function onResize(){ camera.aspect=window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); }
+
+function setupMobileControls(){
+  const base=document.getElementById('stickBase'), stick=document.getElementById('stick');
+  let active=false, id=null, cx=0, cy=0;
+  base.addEventListener('touchstart', e=>{ const t=e.changedTouches[0]; active=true; id=t.identifier; const rect=base.getBoundingClientRect(); cx=rect.left+rect.width/2; cy=rect.top+rect.height/2; handleStick(t); e.preventDefault(); }, {passive:false});
+  base.addEventListener('touchmove', e=>{ if(!active) return; for(const t of e.changedTouches) if(t.identifier===id) handleStick(t); e.preventDefault(); }, {passive:false});
+  base.addEventListener('touchend', e=>{ active=false; mobileMove.x=0; mobileMove.y=0; stick.style.transform='translate(0px,0px)'; }, {passive:false});
+  function handleStick(t){ const dx=t.clientX-cx, dy=t.clientY-cy; const d=Math.hypot(dx,dy), max=42; const k=d>max?max/d:1; const sx=dx*k, sy=dy*k; stick.style.transform=`translate(${sx}px,${sy}px)`; mobileMove.x=sx/max; mobileMove.y=sy/max; }
+
+  const look=document.getElementById('touchLook');
+  let lid=null, lastX=0,lastY=0;
+  look.addEventListener('touchstart', e=>{ const t=e.changedTouches[0]; lid=t.identifier; lastX=t.clientX; lastY=t.clientY; e.preventDefault(); }, {passive:false});
+  look.addEventListener('touchmove', e=>{ for(const t of e.changedTouches){ if(t.identifier===lid){ const dx=t.clientX-lastX, dy=t.clientY-lastY; lastX=t.clientX; lastY=t.clientY; player.yaw -= dx*0.006; player.pitch -= dy*0.0052; player.pitch=clamp(player.pitch,-1.35,1.15); } } e.preventDefault(); }, {passive:false});
+  look.addEventListener('touchend', e=>{ lid=null; }, {passive:false});
+}
+</script>
+</body>
+</html>
